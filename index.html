@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LAS VEGAS GP // 2026 // 22 CARS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Monoton&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05050a;
+    --bg-2: #0a0a14;
+    --grid: #15152a;
+    --neon-pink: #ff2d95;
+    --neon-cyan: #00e6ff;
+    --neon-yellow: #ffd60a;
+    --text: #e8e8ea;
+    --dim: #6b6b85;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+  }
+  body {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255,45,149,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0,230,255,0.08) 0%, transparent 60%),
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
+      var(--bg);
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    grid-template-rows: 56px 1fr 40px;
+  }
+  header {
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--grid);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 24px;
+  }
+  .logo {
+    font-family: 'Monoton', cursive;
+    font-size: 28px;
+    letter-spacing: 4px;
+    background: linear-gradient(90deg, var(--neon-pink), var(--neon-yellow), var(--neon-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(255, 45, 149, 0.3);
+  }
+  .logo::before {
+    content: "●";
+    color: var(--neon-pink);
+    margin-right: 10px;
+    -webkit-text-fill-color: var(--neon-pink);
+    animation: blink 1.2s infinite;
+    text-shadow: 0 0 12px var(--neon-pink);
+  }
+  @keyframes blink { 50% { opacity: 0.2; } }
+  .session {
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .session b { color: var(--neon-cyan); font-weight: 700; }
+  .top-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 28px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .top-stats span b {
+    color: var(--text);
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  main {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  .corner-label {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    pointer-events: none;
+  }
+  .corner-label b { color: var(--neon-cyan); }
+  .br {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  footer {
+    background: var(--bg-2);
+    border-top: 1px solid var(--grid);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  footer .controls { display: flex; gap: 16px; align-items: center; }
+  button {
+    background: transparent;
+    border: 1px solid var(--grid);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 6px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  button:hover { border-color: var(--neon-pink); color: var(--neon-pink); }
+  button.active {
+    background: var(--neon-pink);
+    color: var(--bg);
+    border-color: var(--neon-pink);
+    box-shadow: 0 0 12px rgba(255, 45, 149, 0.5);
+  }
+  header { grid-column: 1 / -1; }
+  footer { grid-column: 1 / -1; }
+  aside {
+    background: var(--bg-2);
+    border-left: 1px solid var(--grid);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  aside::-webkit-scrollbar { width: 4px; }
+  aside::-webkit-scrollbar-thumb { background: var(--grid); }
+  .timing-head {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--grid);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .timing-head small {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 26px 4px 1fr 58px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid #10101e;
+    font-size: 12px;
+    transition: background 0.15s;
+  }
+  .row:hover { background: #12122a; }
+  .pos { font-weight: 800; color: var(--text); font-size: 13px; text-align: center; }
+  .pos.p1 { color: var(--neon-yellow); text-shadow: 0 0 8px var(--neon-yellow); }
+  .pos.p2 { color: #c0c0c8; }
+  .pos.p3 { color: #cd7f32; }
+  .swatch { width: 4px; height: 18px; border-radius: 1px; }
+  .dname { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  .dname .team { color: var(--dim); font-size: 9px; }
+  .gap { text-align: right; color: var(--dim); font-size: 10px; letter-spacing: 0.5px; }
+  .gap.leader { color: var(--neon-cyan); font-weight: 700; }
+  .pit-badge {
+    display: inline-block;
+    background: var(--neon-yellow);
+    color: var(--bg);
+    font-size: 8px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    margin-left: 4px;
+  }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LAS&nbsp;VEGAS&nbsp;GP&nbsp;2026</div>
+  <div class="session">SESSION <b>RACE</b> / 22 CARS / NIGHT</div>
+  <div class="top-stats">
+    <span>WEATHER<b>DRY</b></span>
+    <span>AIR<b>12°C</b></span>
+    <span>TRACK<b>18°C</b></span>
+  </div>
+</header>
+
+<main>
+  <canvas id="track"></canvas>
+  <div class="corner-label">STRIP CIRCUIT // 6.201 KM // <b>50 LAPS</b></div>
+  <div class="br">CANVAS · O(n) PER FRAME · 22 CARS</div>
+</main>
+
+<aside>
+  <div class="timing-head">LIVE TIMING <small id="lapclock">+00:00.000</small></div>
+  <div id="leaderboard"></div>
+</aside>
+
+<footer>
+  <div>BUILT WITH CANVAS · ZERO DEPENDENCIES</div>
+  <div class="controls">
+    <span>SPEED</span>
+    <button data-speed="0.5">0.5×</button>
+    <button data-speed="1" class="active">1×</button>
+    <button data-speed="2">2×</button>
+    <button data-speed="4">4×</button>
+    <button id="pause">PAUSE</button>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('track');
+  const ctx = canvas.getContext('2d');
+
+  const TEAMS = {
+    MER: { name: 'MERCEDES',     color: '#27F4D2' },
+    WIL: { name: 'WILLIAMS',     color: '#1868DB' },
+    HAA: { name: 'HAAS',         color: '#B6BABD' },
+    FER: { name: 'FERRARI',      color: '#E8002D' },
+    RBR: { name: 'RED BULL',     color: '#4781D7' },
+    RBT: { name: 'RACING BULLS', color: '#6692FF' },
+    AST: { name: 'ASTON MARTIN', color: '#229971' },
+    ALP: { name: 'ALPINE',       color: '#FF87BC' },
+    CAD: { name: 'CADILLAC',     color: '#C8102E' },
+    MCL: { name: 'MCLAREN',      color: '#FF8000' },
+    AUD: { name: 'AUDI',         color: '#52E252' },
+  };
+
+  const GRID = [
+    ['ANT', 'MER'], ['RUS', 'MER'],
+    ['ALB', 'WIL'], ['SAI', 'WIL'],
+    ['BEA', 'HAA'], ['OCO', 'HAA'],
+    ['HAM', 'FER'], ['LEC', 'FER'],
+    ['VER', 'RBR'], ['HAD', 'RBR'],
+    ['LAW', 'RBT'], ['LIN', 'RBT'],
+    ['ALO', 'AST'], ['STR', 'AST'],
+    ['GAS', 'ALP'], ['COL', 'ALP'],
+    ['BOT', 'CAD'], ['PER', 'CAD'],
+    ['NOR', 'MCL'], ['PIA', 'MCL'],
+    ['HUL', 'AUD'], ['BOR', 'AUD'],
+  ];
+
+  let speedMul = 1;
+  let paused = false;
+  document.querySelectorAll('button[data-speed]').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('button[data-speed]').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      speedMul = parseFloat(b.dataset.speed);
+    });
+  });
+  document.getElementById('pause').addEventListener('click', e => {
+    paused = !paused;
+    e.target.textContent = paused ? 'RESUME' : 'PAUSE';
+  });
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function makeLine(x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const L = Math.hypot(dx, dy);
+    return {
+      length: L,
+      at(t) { return [x0 + dx * t, y0 + dy * t]; },
+      tangent() { return [dx / L, dy / L]; },
+    };
+  }
+  function makeArc(cx, cy, r, a0, a1, dir) {
+    const sweep = dir === 1 ? (a1 - a0 + Math.PI * 2) % (Math.PI * 2)
+                            : (a0 - a1 + Math.PI * 2) % (Math.PI * 2);
+    const L = r * sweep;
+    return {
+      length: L,
+      at(t) {
+        const a = a0 + dir * sweep * t;
+        return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      },
+      tangent(t) {
+        const a = a0 + dir * sweep * t;
+        return [-Math.sin(a) * dir, Math.cos(a) * dir];
+      },
+    };
+  }
+
+  // Path is rotated so s=0 sits at the middle of the Strip (x=540, y=500).
+  // We start there, go left to the hairpin, around, and finish coming back
+  // along the right half of the Strip → through S/F.
+  const segs = [];
+  segs.push(makeLine(540, 500, 180, 500));                              // first half of strip (S/F → hairpin)
+  segs.push(makeArc(180, 440, 60, Math.PI / 2, -Math.PI / 2, -1));      // T14 hairpin
+  segs.push(makeLine(180, 380, 180, 250));                              // up the back
+  segs.push(makeArc(260, 250, 80, Math.PI, 0, 1));                      // Sphere sweeper
+  segs.push(makeLine(340, 250, 560, 170));                              // diagonal
+  segs.push(makeArc(560, 210, 40, -Math.PI / 2, 0, 1));                 // chicane part 1
+  segs.push(makeArc(660, 210, 60, Math.PI, Math.PI / 2, -1));           // chicane part 2
+  segs.push(makeLine(660, 270, 820, 270));                              // east straight
+  segs.push(makeArc(820, 385, 115, -Math.PI / 2, Math.PI / 2, 1));      // big sweeper home — exits onto strip at (820, 500)
+  segs.push(makeLine(820, 500, 540, 500));                              // strip from sweeper exit → S/F
+
+  const cum = [0];
+  for (const s of segs) cum.push(cum[cum.length - 1] + s.length);
+  const TOTAL_LEN = cum[cum.length - 1];
+
+  // ─────────────────────────────────────────────────────────────
+  // PIT LANE — parallel path below the Strip
+  // Entry: cars peel off the racing line a bit before S/F.
+  // Box:   mid pit lane (visible "parked" position).
+  // Exit:  rejoin the strip past S/F.
+  // ─────────────────────────────────────────────────────────────
+  const PIT_Y = 545; // below the strip (which is at y=500)
+  const pitSegs = [];
+  // 1) Entry diagonal: peels off strip at (700, 500) → pit lane at (660, 545)
+  pitSegs.push(makeLine(700, 500, 660, PIT_Y));
+  // 2) Pit lane straight: (660, 545) → (420, 545)
+  pitSegs.push(makeLine(660, PIT_Y, 420, PIT_Y));
+  // 3) Exit diagonal: pit lane (420, 545) → strip (380, 500)
+  pitSegs.push(makeLine(420, PIT_Y, 380, 500));
+
+  const pitCum = [0];
+  for (const s of pitSegs) pitCum.push(pitCum[pitCum.length - 1] + s.length);
+  const PIT_LEN = pitCum[pitCum.length - 1];
+
+  // The "box" — where cars stop for the stop — sits in the middle of segment 2
+  const PIT_BOX_S = pitCum[1] + pitSegs[1].length * 0.5;
+
+  function samplePit(s) {
+    s = Math.max(0, Math.min(PIT_LEN, s));
+    let lo = 0, hi = pitSegs.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (pitCum[mid + 1] <= s) lo = mid + 1; else hi = mid;
+    }
+    const seg = pitSegs[lo];
+    const local = (s - pitCum[lo]) / seg.length;
+    const [x, y] = seg.at(local);
+    const [tx, ty] = seg.tangent(local);
+    return { x, y, tx, ty };
+  }
+
+  function sampleTrack(s) {
+    s = ((s % TOTAL_LEN) + TOTAL_LEN) % TOTAL_LEN;
+    let lo = 0, hi = segs.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid + 1] <= s) lo = mid + 1; else hi = mid;
+    }
+    const seg = segs[lo];
+    const local = (s - cum[lo]) / seg.length;
+    const [x, y] = seg.at(local);
+    const [tx, ty] = seg.tangent(local);
+    return { x, y, tx, ty };
+  }
+
+  // Tighter padding + full width = bigger track
+  function transform(nx, ny) {
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const pad = 30;
+    const scale = Math.min((W - pad * 2) / 1000, (H - pad * 2) / 600);
+    const ox = (W - 1000 * scale) / 2;
+    const oy = (H - 600 * scale) / 2;
+    return [ox + nx * scale, oy + ny * scale, scale];
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TYRES — Vegas is low-deg (smooth surface, cool night temps)
+  // Lifespans in laps. Real noise applied per-car (±15%).
+  // ─────────────────────────────────────────────────────────────
+  const COMPOUNDS = {
+    S: { name: 'SOFT',   baseLife: 18, trailTint: '#ff3344' }, // red
+    M: { name: 'MEDIUM', baseLife: 28, trailTint: '#ffd60a' }, // yellow
+    H: { name: 'HARD',   baseLife: 38, trailTint: '#ffffff' }, // white
+  };
+  const COMPOUND_KEYS = ['S', 'M', 'H'];
+
+  function randomCompound() {
+    return COMPOUND_KEYS[(Math.random() * 3) | 0];
+  }
+  function rollLife(compound) {
+    // ±15% noise — some drivers nurse tyres, some shred them
+    const base = COMPOUNDS[compound].baseLife;
+    return Math.round(base * (0.85 + Math.random() * 0.30));
+  }
+
+  const cars = GRID.map(([driver, teamKey], i) => {
+    const team = TEAMS[teamKey];
+    const startCompound = randomCompound();
+    return {
+      driver,
+      teamKey,
+      teamName: team.name,
+      color: team.color,
+      s: -i * 18,
+      baseSpeed: 1.6 + Math.random() * 0.3,
+      // tyres
+      compound: startCompound,
+      tyreTint: COMPOUNDS[startCompound].trailTint,
+      lapsOnTyre: 0,
+      tyreLife: rollLife(startCompound),
+      // pit lane state machine: 'racing' | 'entering' | 'stopped' | 'exiting'
+      pitState: 'racing',
+      pitS: 0,            // arc-length along pit lane
+      pitFrames: 0,       // frames remaining in stopped phase
+      needsPit: false,    // flagged when tyres expire — pit on next S/F crossing
+    };
+  });
+
+  let frame = 0;
+
+  function buildPath2D() {
+    const path = new Path2D();
+    let first = true;
+    const STEPS = 800;
+    for (let i = 0; i <= STEPS; i++) {
+      const s = (i / STEPS) * TOTAL_LEN;
+      const p = sampleTrack(s);
+      const [px, py] = transform(p.x, p.y);
+      if (first) { path.moveTo(px, py); first = false; }
+      else path.lineTo(px, py);
+    }
+    path.closePath();
+    return path;
+  }
+
+  function drawTrack() {
+    const path = buildPath2D();
+    const [, , scale] = transform(0, 0);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 45, 149, 0.4)';
+    ctx.shadowBlur = 40;
+    ctx.lineWidth = 42 * scale + 10;
+    ctx.strokeStyle = 'rgba(255, 45, 149, 0.06)';
+    ctx.stroke(path);
+    ctx.restore();
+
+    ctx.lineWidth = 40 * scale;
+    ctx.strokeStyle = '#161620';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke(path);
+
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.stroke(path);
+
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 14]);
+    ctx.strokeStyle = 'rgba(0, 230, 255, 0.2)';
+    ctx.stroke(path);
+    ctx.setLineDash([]);
+
+    // ── PIT LANE ─────────────────────────────────────────────────
+    const pitPath = new Path2D();
+    let firstP = true;
+    const PIT_STEPS = 100;
+    for (let i = 0; i <= PIT_STEPS; i++) {
+      const s = (i / PIT_STEPS) * PIT_LEN;
+      const p = samplePit(s);
+      const [px, py] = transform(p.x, p.y);
+      if (firstP) { pitPath.moveTo(px, py); firstP = false; }
+      else pitPath.lineTo(px, py);
+    }
+    // Pit asphalt (narrower than main track)
+    ctx.lineWidth = 16 * scale;
+    ctx.strokeStyle = '#141420';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke(pitPath);
+    // Pit white edges
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 214, 10, 0.5)';
+    ctx.setLineDash([8, 6]);
+    ctx.stroke(pitPath);
+    ctx.setLineDash([]);
+
+    // Pit box marker (yellow rectangle where cars stop)
+    const box = samplePit(PIT_BOX_S);
+    const [bx, by, bs] = transform(box.x, box.y);
+    ctx.strokeStyle = '#ffd60a';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx - 14 * bs, by - 8 * bs, 28 * bs, 16 * bs);
+
+    // "PIT LANE" label
+    const pitLabel = transform(540, 575);
+    ctx.fillStyle = 'rgba(255, 214, 10, 0.7)';
+    ctx.font = '700 10px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('PIT LANE', pitLabel[0], pitLabel[1]);
+
+    // ── Track annotations ────────────────────────────────────────
+    const sphere = transform(260, 160);
+    ctx.fillStyle = 'rgba(255, 45, 149, 0.75)';
+    ctx.font = '700 11px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('◉ THE SPHERE', sphere[0], sphere[1]);
+
+    const strip = transform(300, 475);
+    ctx.fillStyle = 'rgba(0, 230, 255, 0.75)';
+    ctx.font = '700 12px JetBrains Mono';
+    ctx.fillText('— LAS VEGAS BLVD —', strip[0], strip[1]);
+  }
+
+  // Where on the main track does the pit entry sit?
+  // Entry point on main track is (700, 500). That's along the closing strip
+  // segment (820, 500) → (540, 500), which is the LAST segment.
+  // Distance from start of that segment to x=700 is (820 - 700) = 120 units.
+  const PIT_ENTRY_S = cum[cum.length - 2] + 120;
+  // Exit point on main track is (380, 500). That's along the FIRST segment
+  // (540, 500) → (180, 500). Distance from start = (540 - 380) = 160 units.
+  const PIT_EXIT_S = 160;
+  // Pit lane speed multiplier — real F1 is ~80km/h vs ~330km/h on track
+  const PIT_SPEED = 0.30;
+  // 2.5 seconds at native 60fps for the actual stop
+  const PIT_STOP_FRAMES = 150;
+
+  function tickCars() {
+    if (paused) return;
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+
+      // ─── STATE: racing on main track ───────────────────────────
+      if (c.pitState === 'racing') {
+        const wobble = 0.1 * Math.sin(frame * 0.013 + i * 1.7);
+        const sPrev = c.s;
+        c.s += (c.baseSpeed + wobble) * speedMul;
+
+        // Lap detection (anywhere on track)
+        const lapPrev = Math.floor(sPrev / TOTAL_LEN);
+        const lapNow  = Math.floor(c.s   / TOTAL_LEN);
+        if (lapNow > lapPrev && sPrev >= 0) {
+          c.lapsOnTyre++;
+          if (c.lapsOnTyre >= c.tyreLife) c.needsPit = true;
+        }
+
+        // Pit entry detection: did we cross the pit entry point this lap?
+        // Compute s mod TOTAL_LEN for previous and current.
+        if (c.needsPit && sPrev >= 0) {
+          const sModPrev = ((sPrev % TOTAL_LEN) + TOTAL_LEN) % TOTAL_LEN;
+          const sModNow  = ((c.s   % TOTAL_LEN) + TOTAL_LEN) % TOTAL_LEN;
+          // Detect crossing PIT_ENTRY_S (in linear, non-wrapped progress)
+          const crossed = (sModPrev <= PIT_ENTRY_S && sModNow >= PIT_ENTRY_S)
+                       || (sModPrev > sModNow && (sModNow >= PIT_ENTRY_S || sModPrev <= PIT_ENTRY_S));
+          if (crossed) {
+            c.pitState = 'entering';
+            c.pitS = 0;
+            c.needsPit = false;
+          }
+        }
+      }
+
+      // ─── STATE: driving down pit lane to the box ───────────────
+      else if (c.pitState === 'entering') {
+        c.pitS += c.baseSpeed * PIT_SPEED * speedMul;
+        if (c.pitS >= PIT_BOX_S) {
+          c.pitS = PIT_BOX_S;
+          c.pitState = 'stopped';
+          c.pitFrames = PIT_STOP_FRAMES;
+        }
+      }
+
+      // ─── STATE: stopped at the box (tyre change) ───────────────
+      else if (c.pitState === 'stopped') {
+        // Pit stop time is REAL — doesn't speed up with sim multiplier
+        // (otherwise 4× speed would skip the whole stop)
+        c.pitFrames--;
+        if (c.pitFrames <= 0) {
+          // New random tyres
+          c.compound = randomCompound();
+          c.tyreTint = COMPOUNDS[c.compound].trailTint;
+          c.tyreLife = rollLife(c.compound);
+          c.lapsOnTyre = 0;
+          c.pitState = 'exiting';
+        }
+      }
+
+      // ─── STATE: driving from box to pit exit ───────────────────
+      else if (c.pitState === 'exiting') {
+        c.pitS += c.baseSpeed * PIT_SPEED * speedMul;
+        if (c.pitS >= PIT_LEN) {
+          // Rejoin main track at pit exit point
+          // We need to set c.s such that (c.s mod TOTAL_LEN) == PIT_EXIT_S
+          // Preserve the lap count we were on.
+          const currentLap = Math.floor(c.s / TOTAL_LEN);
+          c.s = currentLap * TOTAL_LEN + PIT_EXIT_S;
+          c.pitState = 'racing';
+        }
+      }
+    }
+  }
+
+  function drawCars() {
+    const [, , scale] = transform(0, 0);
+    const carR = 5 * scale + 2;
+    const labelOff = 16 * scale;
+
+    for (const c of cars) {
+      // Sample position from main track OR pit lane based on state
+      const inPit = c.pitState !== 'racing';
+      const p = inPit ? samplePit(c.pitS) : sampleTrack(c.s);
+      const [x, y] = transform(p.x, p.y);
+
+      // Trail behind the car (skip when stopped — no trail when standing still)
+      if (c.pitState !== 'stopped') {
+        const back = inPit ? samplePit(Math.max(0, c.pitS - 7)) : sampleTrack(c.s - 7);
+        const [bx, by] = transform(back.x, back.y);
+        const grad = ctx.createLinearGradient(bx, by, x, y);
+        grad.addColorStop(0, 'transparent');
+        grad.addColorStop(0.6, c.tyreTint + '80');
+        grad.addColorStop(1, c.color);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+
+      // Glowing dot — team color
+      ctx.save();
+      ctx.shadowColor = c.color;
+      ctx.shadowBlur = c.pitState === 'stopped' ? 22 : 14; // pulse when stopped
+      ctx.fillStyle = c.color;
+      ctx.beginPath();
+      ctx.arc(x, y, carR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Tyre compound ring
+      ctx.strokeStyle = c.tyreTint;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, carR + 2.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // "PIT" indicator when stopped — small text below car
+      if (c.pitState === 'stopped') {
+        ctx.fillStyle = '#ffd60a';
+        ctx.font = '700 9px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText('PIT', x, y + carR + 14);
+      }
+
+      // Driver label (perpendicular to direction of travel)
+      const offX = -p.ty * labelOff;
+      const offY = p.tx * labelOff;
+      ctx.fillStyle = '#e8e8ea';
+      ctx.font = '700 10px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.driver, x + offX, y + offY + 3);
+    }
+  }
+
+  let raceStart = performance.now();
+  let boardTick = 0;
+
+  function renderBoard() {
+    // Sort by arc-length progress — cars in pit get their main-track s frozen
+    const sorted = [...cars].sort((a, b) => b.s - a.s);
+    const leader = sorted[0];
+    let html = '';
+    sorted.forEach((c, idx) => {
+      const inPit = c.pitState !== 'racing';
+      const gap = idx === 0 ? 'LEADER'
+        : '+' + ((leader.s - c.s) / TOTAL_LEN).toFixed(3) + 'L';
+      const cls = idx === 0 ? 'p1' : idx === 1 ? 'p2' : idx === 2 ? 'p3' : '';
+      const gapCls = idx === 0 ? 'leader' : '';
+      const pitBadge = inPit ? `<span class="pit-badge">${c.pitState === 'stopped' ? 'BOX' : 'PIT'}</span>` : '';
+      html += `<div class="row">
+        <div class="pos ${cls}">${String(idx + 1).padStart(2, '0')}</div>
+        <div class="swatch" style="background:${c.color}"></div>
+        <div class="dname">${c.driver}${pitBadge}<br><span class="team">${c.teamName}</span></div>
+        <div class="gap ${gapCls}">${gap}</div>
+      </div>`;
+    });
+    document.getElementById('leaderboard').innerHTML = html;
+    const elapsed = (performance.now() - raceStart) / 1000;
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = (elapsed % 60).toFixed(3).padStart(6, '0');
+    document.getElementById('lapclock').textContent = `+${mm}:${ss}`;
+  }
+
+  function loop() {
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.clearRect(0, 0, W, H);
+    drawTrack();
+    tickCars();
+    drawCars();
+    if (boardTick++ % 6 === 0) renderBoard();
+    frame++;
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>
