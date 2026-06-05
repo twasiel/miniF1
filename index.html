@@ -169,6 +169,18 @@
     color: var(--dim);
     letter-spacing: 1px;
   }
+  .lap-bar {
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--grid);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .lap-bar b { color: var(--neon-cyan); font-size: 13px; font-weight: 800; }
   .row {
     display: grid;
     grid-template-columns: 26px 4px 1fr 58px;
@@ -223,6 +235,7 @@
 
 <aside>
   <div class="timing-head">LIVE TIMING <small id="lapclock">+00:00.000</small></div>
+  <div class="lap-bar">LAP <b id="lapcounter">0 / 50</b></div>
   <div id="leaderboard"></div>
 </aside>
 
@@ -273,6 +286,14 @@
 
   let speedMul = 1;
   let paused = false;
+  // ── RACE FINISH ───────────────────────────────────────────────
+  // Leader completing this many laps ends the race. Matches the
+  // "50 LAPS" label. raceOver freezes the sim; finishOrder is the
+  // classification snapshot taken at the moment of the chequered flag.
+  const RACE_LAPS = 50;
+  let raceOver = false;
+  let finishOrder = null;
+  let finishTime = null;
   document.querySelectorAll('button[data-speed]').forEach(b => {
     b.addEventListener('click', () => {
       document.querySelectorAll('button[data-speed]').forEach(x => x.classList.remove('active'));
@@ -303,56 +324,104 @@
       tangent() { return [dx / L, dy / L]; },
     };
   }
-  function makeArc(cx, cy, r, a0, a1, dir) {
-    const sweep = dir === 1 ? (a1 - a0 + Math.PI * 2) % (Math.PI * 2)
-                            : (a0 - a1 + Math.PI * 2) % (Math.PI * 2);
-    const L = r * sweep;
+  // ─────────────────────────────────────────────────────────────
+  // CIRCUIT GEOMETRY — Las Vegas Strip Circuit (17 turns, per formula1.com)
+  // Centerline digitized from the official track map, then fed
+  // through a closed Catmull-Rom spline. Each spline span exposes
+  // the SAME {length, at(t), tangent(t)} interface as makeLine/makeArc,
+  // so the arc-length sampler downstream doesn't know the difference.
+  //
+  // Catmull-Rom (centripetal-ish, uniform α=0.5 form):
+  //   p(t) = 0.5 * [ 2P1
+  //                + (-P0+P2) t
+  //                + (2P0-5P1+4P2-P3) t²
+  //                + (-P0+3P1-3P2+P3) t³ ]
+  // tangent = dp/dt (un-normalized direction; sampler normalizes).
+  // ─────────────────────────────────────────────────────────────
+  const CTRL = [
+    [828.2, 96.9],   // T1
+    [804.6, 78.5],   // T2
+    [845.2, 148.6],  // T3
+    [778.8, 176.7],  // T4
+    [380.0, 196.6],  // T5  (end of Sector 1 straight)
+    [380.0, 82.2],   // T6
+    [302.5, 60.0],   // T7
+    [280.3, 95.4],   // T8
+    [232.3, 63.7],   // T9
+    [228.6, 263.1],  // T10
+    [89.8, 318.5],   // T11
+    [69.8, 399.7],   // T12
+    [302.5, 523.8],  // T13
+    [885.8, 540.0],  // T14
+    [869.6, 501.6],  // T15
+    [926.5, 484.6],  // T16
+    [930.2, 185.5],  // T17
+    [878.5, 144.9],  // run back toward S/F
+  ];
+
+  // One Catmull-Rom span between P1 and P2, given neighbors P0, P3.
+  function makeSpline(p0, p1, p2, p3) {
+    // Polynomial coefficients: p(t) = a + b t + c t² + d t²·t
+    const ax = p1[0], ay = p1[1];
+    const bx = 0.5 * (-p0[0] + p2[0]),               by = 0.5 * (-p0[1] + p2[1]);
+    const cx = 0.5 * (2*p0[0] - 5*p1[0] + 4*p2[0] - p3[0]),
+          cy = 0.5 * (2*p0[1] - 5*p1[1] + 4*p2[1] - p3[1]);
+    const dx = 0.5 * (-p0[0] + 3*p1[0] - 3*p2[0] + p3[0]),
+          dy = 0.5 * (-p0[1] + 3*p1[1] - 3*p2[1] + p3[1]);
+    const at = (t) => [ax + bx*t + cx*t*t + dx*t*t*t,
+                       ay + by*t + cy*t*t + dy*t*t*t];
+    // Approximate arc length by sampling (Riemann sum over the span).
+    const N = 24;
+    let L = 0, prev = at(0);
+    for (let i = 1; i <= N; i++) {
+      const cur = at(i / N);
+      L += Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
+      prev = cur;
+    }
     return {
       length: L,
-      at(t) {
-        const a = a0 + dir * sweep * t;
-        return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-      },
+      at(t) { return at(t); },
       tangent(t) {
-        const a = a0 + dir * sweep * t;
-        return [-Math.sin(a) * dir, Math.cos(a) * dir];
+        // dp/dt = b + 2c t + 3d t²  (direction only; caller normalizes)
+        const tx = bx + 2*cx*t + 3*dx*t*t;
+        const ty = by + 2*cy*t + 3*dy*t*t;
+        const m = Math.hypot(tx, ty) || 1;
+        return [tx / m, ty / m];
       },
     };
   }
 
-  // Path is rotated so s=0 sits at the middle of the Strip (x=540, y=500).
-  // We start there, go left to the hairpin, around, and finish coming back
-  // along the right half of the Strip → through S/F.
+  // Build the closed loop: one spline span per control-point edge,
+  // wrapping indices modulo n so the curve closes smoothly (C¹).
   const segs = [];
-  segs.push(makeLine(540, 500, 180, 500));                              // first half of strip (S/F → hairpin)
-  segs.push(makeArc(180, 440, 60, Math.PI / 2, -Math.PI / 2, -1));      // T14 hairpin
-  segs.push(makeLine(180, 380, 180, 250));                              // up the back
-  segs.push(makeArc(260, 250, 80, Math.PI, 0, 1));                      // Sphere sweeper
-  segs.push(makeLine(340, 250, 560, 170));                              // diagonal
-  segs.push(makeArc(560, 210, 40, -Math.PI / 2, 0, 1));                 // chicane part 1
-  segs.push(makeArc(660, 210, 60, Math.PI, Math.PI / 2, -1));           // chicane part 2
-  segs.push(makeLine(660, 270, 820, 270));                              // east straight
-  segs.push(makeArc(820, 385, 115, -Math.PI / 2, Math.PI / 2, 1));      // big sweeper home — exits onto strip at (820, 500)
-  segs.push(makeLine(820, 500, 540, 500));                              // strip from sweeper exit → S/F
+  const n = CTRL.length;
+  for (let i = 0; i < n; i++) {
+    const p0 = CTRL[(i - 1 + n) % n];
+    const p1 = CTRL[i];
+    const p2 = CTRL[(i + 1) % n];
+    const p3 = CTRL[(i + 2) % n];
+    segs.push(makeSpline(p0, p1, p2, p3));
+  }
 
   const cum = [0];
   for (const s of segs) cum.push(cum[cum.length - 1] + s.length);
   const TOTAL_LEN = cum[cum.length - 1];
 
   // ─────────────────────────────────────────────────────────────
-  // PIT LANE — parallel path below the Strip
-  // Entry: cars peel off the racing line a bit before S/F.
-  // Box:   mid pit lane (visible "parked" position).
-  // Exit:  rejoin the strip past S/F.
+  // PIT LANE — parallel path just inside the start/finish straight
+  // (the T17 → T1 run, on the right side of the map around x≈905).
+  // Entry: peel off as cars come up toward S/F.
+  // Box:   mid pit lane.
+  // Exit:  rejoin past S/F heading into T1.
   // ─────────────────────────────────────────────────────────────
-  const PIT_Y = 545; // below the strip (which is at y=500)
+  const PIT_X = 895; // just inside the right straight (track ~x=930)
   const pitSegs = [];
-  // 1) Entry diagonal: peels off strip at (700, 500) → pit lane at (660, 545)
-  pitSegs.push(makeLine(700, 500, 660, PIT_Y));
-  // 2) Pit lane straight: (660, 545) → (420, 545)
-  pitSegs.push(makeLine(660, PIT_Y, 420, PIT_Y));
-  // 3) Exit diagonal: pit lane (420, 545) → strip (380, 500)
-  pitSegs.push(makeLine(420, PIT_Y, 380, 500));
+  // 1) Entry diagonal: peel off the straight (930, 300) → pit lane (895, 280)
+  pitSegs.push(makeLine(930, 300, PIT_X, 280));
+  // 2) Pit lane straight: (895, 280) → (895, 150)
+  pitSegs.push(makeLine(PIT_X, 280, PIT_X, 150));
+  // 3) Exit diagonal: pit lane (895, 150) → rejoin near S/F (878, 145)
+  pitSegs.push(makeLine(PIT_X, 150, 878, 145));
 
   const pitCum = [0];
   for (const s of pitSegs) pitCum.push(pitCum[pitCum.length - 1] + s.length);
@@ -518,41 +587,52 @@
     ctx.lineWidth = 1.5;
     ctx.strokeRect(bx - 14 * bs, by - 8 * bs, 28 * bs, 16 * bs);
 
-    // "PIT LANE" label
-    const pitLabel = transform(540, 575);
+    // "PIT LANE" label (near the start/finish straight)
+    const pitLabel = transform(835, 215);
     ctx.fillStyle = 'rgba(255, 214, 10, 0.7)';
     ctx.font = '700 10px JetBrains Mono';
     ctx.textAlign = 'center';
     ctx.fillText('PIT LANE', pitLabel[0], pitLabel[1]);
 
     // ── Track annotations ────────────────────────────────────────
-    const sphere = transform(260, 160);
-    ctx.fillStyle = 'rgba(255, 45, 149, 0.75)';
+    const lake = transform(500, 420);
+    ctx.fillStyle = 'rgba(0, 230, 255, 0.7)';
     ctx.font = '700 11px JetBrains Mono';
     ctx.textAlign = 'center';
-    ctx.fillText('◉ THE SPHERE', sphere[0], sphere[1]);
+    ctx.fillText('◉ THE SPHERE', lake[0], lake[1]);
 
-    const strip = transform(300, 475);
-    ctx.fillStyle = 'rgba(0, 230, 255, 0.75)';
+    const straight = transform(560, 205);
+    ctx.fillStyle = 'rgba(255, 45, 149, 0.75)';
     ctx.font = '700 12px JetBrains Mono';
-    ctx.fillText('— LAS VEGAS BLVD —', strip[0], strip[1]);
+    ctx.fillText('— LAS VEGAS BLVD —', straight[0], straight[1]);
   }
 
-  // Where on the main track does the pit entry sit?
-  // Entry point on main track is (700, 500). That's along the closing strip
-  // segment (820, 500) → (540, 500), which is the LAST segment.
-  // Distance from start of that segment to x=700 is (820 - 700) = 120 units.
-  const PIT_ENTRY_S = cum[cum.length - 2] + 120;
-  // Exit point on main track is (380, 500). That's along the FIRST segment
-  // (540, 500) → (180, 500). Distance from start = (540 - 380) = 160 units.
-  const PIT_EXIT_S = 160;
+  // Pit entry/exit anchors, expressed as arc-length s along the loop.
+  // s=0 sits at CTRL[0] (T1). The pit lane parallels the final straight,
+  // so we anchor entry late in the lap and exit right at the start.
+  // Entry: ~92% of the way around (cars approaching S/F).
+  const PIT_ENTRY_S = TOTAL_LEN * 0.93;
+  // Exit: just after the line, ~1% in (heading into T1).
+  const PIT_EXIT_S = TOTAL_LEN * 0.01;
   // Pit lane speed multiplier — real F1 is ~80km/h vs ~330km/h on track
   const PIT_SPEED = 0.30;
   // 2.5 seconds at native 60fps for the actual stop
   const PIT_STOP_FRAMES = 150;
 
   function tickCars() {
-    if (paused) return;
+    if (paused || raceOver) return;
+
+    // ── Chequered flag check ──────────────────────────────────────
+    // The leader's completed-lap count is floor(s / TOTAL_LEN). Once the
+    // current race leader reaches RACE_LAPS, freeze everything and snapshot
+    // the final classification (sorted by arc-length progress, P1 first).
+    const lapsDone = Math.max(...cars.map(c => Math.floor(c.s / TOTAL_LEN)));
+    if (lapsDone >= RACE_LAPS) {
+      raceOver = true;
+      finishOrder = [...cars].sort((a, b) => b.s - a.s);
+      return;
+    }
+
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
 
@@ -691,6 +771,107 @@
   let raceStart = performance.now();
   let boardTick = 0;
 
+  // ─────────────────────────────────────────────────────────────
+  // PODIUM — drawn over the canvas once raceOver is true.
+  // Layout (left → right): SILVER (P2), GOLD (P1), BRONZE (P3).
+  // Heights encode rank: gold tallest, silver medium, bronze shortest.
+  // Each block gets a team-colored ball on top, and the driver's
+  // 3-letter code floats above the ball.
+  // ─────────────────────────────────────────────────────────────
+  function drawPodium() {
+    if (!finishOrder) return;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+
+    // Dim the track behind the podium.
+    ctx.save();
+    ctx.fillStyle = 'rgba(5, 5, 10, 0.78)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Chequered-flag banner.
+    ctx.fillStyle = '#ffd60a';
+    ctx.font = "800 26px 'Bebas Neue', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(255, 214, 10, 0.6)';
+    ctx.shadowBlur = 24;
+    ctx.fillText('⬛ CHEQUERED FLAG ⬜', W / 2, H * 0.16);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'var(--dim)';
+    ctx.fillStyle = '#6b6b85';
+    ctx.font = "700 12px 'JetBrains Mono', monospace";
+    ctx.fillText(`STRIP CIRCUIT · ${RACE_LAPS} LAPS COMPLETE`, W / 2, H * 0.16 + 24);
+
+    // Block geometry — scales with viewport so it never overflows.
+    const baseY = H * 0.82;                 // common ground line for all blocks
+    const blockW = Math.min(150, W * 0.16);
+    const gap = blockW * 0.18;
+    const cx = W / 2;                        // center (gold sits here)
+    const unit = Math.min(H * 0.14, 90);     // height unit
+
+    // [driverObj, label, blockColor, heightMultiplier, slotIndex(-1,0,1)]
+    const slots = [
+      { car: finishOrder[1], place: 'P2', color: '#c8c8d0', h: 2.0, slot: -1 }, // silver, left, medium
+      { car: finishOrder[0], place: 'P1', color: '#ffd60a', h: 2.8, slot:  0 }, // gold, center, tallest
+      { car: finishOrder[2], place: 'P3', color: '#cd7f32', h: 1.3, slot:  1 }, // bronze, right, shortest
+    ];
+
+    for (const s of slots) {
+      if (!s.car) continue;
+      const bx = cx + s.slot * (blockW + gap) - blockW / 2;
+      const bh = unit * s.h;
+      const by = baseY - bh;
+
+      // Block body
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 18;
+      ctx.fillRect(bx, by, blockW, bh);
+      ctx.shadowBlur = 0;
+
+      // Subtle top highlight + place label engraved on the block
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.font = "800 22px 'Bebas Neue', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(s.place, bx + blockW / 2, by + bh / 2 + 8);
+
+      // Team-name strip under the place
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.font = "700 9px 'JetBrains Mono', monospace";
+      ctx.fillText(s.car.teamName, bx + blockW / 2, by + bh / 2 + 24);
+
+      // ── Ball on top (team color) ──────────────────────────────
+      const ballR = Math.max(16, blockW * 0.20);
+      const ballX = bx + blockW / 2;
+      const ballY = by - ballR - 6;
+      ctx.save();
+      ctx.shadowColor = s.car.color;
+      ctx.shadowBlur = 26;
+      ctx.fillStyle = s.car.color;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      // Glossy rim
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // ── Driver 3-letter code above the ball ───────────────────
+      const code = (s.car.driver || '').slice(0, 3).toUpperCase();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = "800 20px 'JetBrains Mono', monospace";
+      ctx.textAlign = 'center';
+      ctx.shadowColor = s.car.color;
+      ctx.shadowBlur = 12;
+      ctx.fillText(code, ballX, ballY - ballR - 10);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+
   function renderBoard() {
     // Sort by arc-length progress — cars in pit get their main-track s frozen
     const sorted = [...cars].sort((a, b) => b.s - a.s);
@@ -711,7 +892,11 @@
       </div>`;
     });
     document.getElementById('leaderboard').innerHTML = html;
-    const elapsed = (performance.now() - raceStart) / 1000;
+    const leaderLap = Math.min(Math.floor(sorted[0].s / TOTAL_LEN) + 1, RACE_LAPS);
+    document.getElementById('lapcounter').textContent = `${leaderLap} / ${RACE_LAPS}`;
+    // Freeze the clock at the chequered flag.
+    if (raceOver && finishTime == null) finishTime = (performance.now() - raceStart) / 1000;
+    const elapsed = raceOver ? finishTime : (performance.now() - raceStart) / 1000;
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const ss = (elapsed % 60).toFixed(3).padStart(6, '0');
     document.getElementById('lapclock').textContent = `+${mm}:${ss}`;
@@ -722,7 +907,11 @@
     ctx.clearRect(0, 0, W, H);
     drawTrack();
     tickCars();
-    drawCars();
+    if (raceOver) {
+      drawPodium();          // overlay replaces the moving cars
+    } else {
+      drawCars();
+    }
     if (boardTick++ % 6 === 0) renderBoard();
     frame++;
     requestAnimationFrame(loop);
